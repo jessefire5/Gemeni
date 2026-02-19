@@ -209,6 +209,224 @@ function updateStepUI() {
   document.getElementById("submitBtn").classList.toggle("hidden", currentStep !== 4);
 }
 
+function openImportMicrosoftFormDialog() {
+  const input = document.getElementById("msFormImportInput");
+  input.value = "";
+  input.click();
+}
+
+function normalizeHeader(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replaceAll("&", "and")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function normalizeCell(value) {
+  return String(value ?? "").trim();
+}
+
+function parseCSVLine(line) {
+  const output = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    const next = line[i + 1];
+
+    if (char === '"' && inQuotes && next === '"') {
+      current += '"';
+      i += 1;
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      output.push(current);
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  output.push(current);
+  return output;
+}
+
+function csvTextToRows(text) {
+  const lines = String(text ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .filter((line) => line.trim() !== "");
+
+  if (lines.length < 2) {
+    return [];
+  }
+
+  const headers = parseCSVLine(lines[0]).map((h) => h.trim());
+  const rows = [];
+
+  for (let i = 1; i < lines.length; i += 1) {
+    const cells = parseCSVLine(lines[i]);
+    const row = {};
+    headers.forEach((header, idx) => {
+      row[header] = normalizeCell(cells[idx]);
+    });
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function toISODate(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const utc = new Date(Math.round((value - 25569) * 86400 * 1000));
+    if (!Number.isNaN(utc.getTime())) {
+      return utc.toISOString().slice(0, 10);
+    }
+  }
+
+  const raw = String(value).trim();
+  if (!raw) {
+    return "";
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw;
+  }
+
+  const slash = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (slash) {
+    let year = Number(slash[3]);
+    if (year < 100) {
+      year += 2000;
+    }
+    const month = String(Number(slash[1])).padStart(2, "0");
+    const day = String(Number(slash[2])).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+
+  return "";
+}
+
+function toNumber(value) {
+  const number = Number(String(value ?? "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(number) ? number : 0;
+}
+
+function pickValue(row, aliases) {
+  for (const alias of aliases) {
+    const value = row[alias];
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return value;
+    }
+  }
+  return "";
+}
+
+function mapMSFormRowToFormData(rawRow) {
+  const row = {};
+  Object.keys(rawRow || {}).forEach((key) => {
+    row[normalizeHeader(key)] = rawRow[key];
+  });
+
+  return {
+    name: normalizeCell(pickValue(row, ["name", "fullname", "studentname", "whatisyourname", "whatisyourfullname"])),
+    email: normalizeCell(pickValue(row, ["email", "emailaddress", "towsonemail", "studentemail", "whatisyourtowsonemail"])),
+    tID: normalizeCell(pickValue(row, ["tid", "tidnumber", "studentid", "towsonid", "towsonuid", "tuid", "whatisyourtidnumber"])),
+    tripName: normalizeCell(pickValue(row, ["tripname", "nameoftrip", "travelrequestname", "conferenceeventname", "eventname"])),
+    destination: normalizeCell(pickValue(row, ["destination", "traveldestination", "citystatecountry", "wheredoyoutravel"])),
+    purpose: normalizeCell(pickValue(row, ["purpose", "purposeoftravel", "reasonfortrip", "travelpurpose", "tripreason"])),
+    startDate: toISODate(pickValue(row, ["startdate", "tripstartdate", "travelstartdate", "departuredate"])),
+    endDate: toISODate(pickValue(row, ["enddate", "tripenddate", "travelenddate", "returndate"])),
+    expReg: toNumber(pickValue(row, ["registrationfee", "registration", "regfee"])),
+    expAir: toNumber(pickValue(row, ["airfare", "flight", "air"])),
+    expLodging: toNumber(pickValue(row, ["lodging", "hotel", "accommodation"])),
+    expMeals: toNumber(pickValue(row, ["meals", "mealcost", "food"]))
+  };
+}
+
+async function importFromMicrosoftForm(event) {
+  const file = event.target.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  try {
+    let rows = [];
+    const fileName = file.name.toLowerCase();
+
+    if (fileName.endsWith(".csv")) {
+      const text = await file.text();
+      rows = csvTextToRows(text);
+    } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
+      if (typeof XLSX === "undefined") {
+        alert("Spreadsheet parser is not available. Refresh and try again.");
+        return;
+      }
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+    } else {
+      alert("Unsupported file type. Use a Microsoft Forms export file (.xlsx, .xls, or .csv).");
+      return;
+    }
+
+    if (!rows.length) {
+      alert("No response rows were found in this file.");
+      return;
+    }
+
+    const latestRow = rows[rows.length - 1];
+    const mapped = mapMSFormRowToFormData(latestRow);
+
+    document.getElementById("studentName").value = mapped.name;
+    document.getElementById("studentEmail").value = mapped.email;
+    document.getElementById("studentID").value = mapped.tID;
+    document.getElementById("tripName").value = mapped.tripName;
+    document.getElementById("destination").value = mapped.destination;
+    document.getElementById("purpose").value = mapped.purpose;
+    document.getElementById("startDate").value = mapped.startDate;
+    document.getElementById("endDate").value = mapped.endDate;
+    document.getElementById("expReg").value = mapped.expReg || "";
+    document.getElementById("expAir").value = mapped.expAir || "";
+    document.getElementById("expLodging").value = mapped.expLodging || "";
+    document.getElementById("expMeals").value = mapped.expMeals || "";
+    calculateTotal();
+
+    document.querySelectorAll(".input-error").forEach((node) => node.classList.remove("input-error"));
+    addNotification(`Imported Microsoft Form data from ${file.name}.`);
+    alert("Microsoft Form data imported into the travel request form.");
+  } catch (_error) {
+    alert("Unable to import that Microsoft Form file. Please verify the file format and try again.");
+  } finally {
+    event.target.value = "";
+  }
+}
+
 function collectFormData() {
   return {
     name: document.getElementById("studentName").value.trim(),
