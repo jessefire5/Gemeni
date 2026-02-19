@@ -1,0 +1,119 @@
+:root {
+  --tu-black: #000000;
+  --tu-gold: #fdb515;
+  --muted-bg: #f8fafc;
+}
+
+body {
+  color: #141414;
+}
+
+.tu-black {
+  background: var(--tu-black);
+}
+
+.tu-gold {
+  background: var(--tu-gold);
+  color: #1a1a1a;
+}
+
+.tu-gold-text {
+  color: var(--tu-gold);
+}
+
+.input-field {
+  border: 1px solid #d6d3d1;
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  background: #fff;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: #d4a216;
+  box-shadow: 0 0 0 3px rgba(253, 181, 21, 0.2);
+}
+
+.input-error {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.16) !important;
+}
+
+.step-tab {
+  background: #f5f5f4;
+  border: 1px solid #d6d3d1;
+  color: #44403c;
+  padding: 0.6rem 0.5rem;
+  border-radius: 0.65rem;
+  text-align: center;
+}
+
+.step-active {
+  border-color: #d4a216;
+  background: #fff7dd;
+  color: #1c1917;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 6px 10px;
+  font-weight: 700;
+}
+
+.status-draft {
+  background: #e7e5e4;
+  color: #44403c;
+}
+
+.status-under-review {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.status-approved {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-revision-needed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.alert-badge {
+  border: 1px solid #fecaca;
+  border-left: 4px solid #ef4444;
+  border-radius: 0.75rem;
+  background: #fef2f2;
+  color: #7f1d1d;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.note-item {
+  border-bottom: 1px solid #e7e5e4;
+  padding: 0.55rem 0.75rem;
+}
+
+.note-item:last-child {
+  border-bottom: none;
+}
+
+@media (max-width: 768px) {
+  .status-pill {
+    font-size: 11px;
+  }
+}
+
+.line-clamp-4 {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
