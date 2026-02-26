@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Towson Travel Portal - Updated</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet">
+  <title>Towson Travel Portal Prototype</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <link rel="stylesheet" href="style.css">
@@ -14,7 +13,7 @@
     <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
       <div>
         <h1 class="text-xl md:text-2xl font-black uppercase tracking-wide">Towson <span class="tu-gold-text">Travel Portal</span></h1>
-        <p class="text-xs text-stone-300">Official Pre-Authorization Workflow</p>
+        <p class="text-xs text-stone-300">Student Travel Request Workflow Prototype</p>
       </div>
       <button id="logoutBtn" class="hidden text-xs md:text-sm font-semibold uppercase tracking-wide hover:underline" onclick="logout()">Logout</button>
     </div>
@@ -23,12 +22,12 @@
   <main class="max-w-6xl mx-auto px-4 py-8">
     <section id="loginSection" class="max-w-md mx-auto bg-white rounded-2xl border-t-8 border-amber-400 shadow-xl p-8">
       <h2 class="text-2xl font-black mb-1 text-stone-900">Sign In</h2>
-      <p class="text-sm text-stone-500 mb-6">Use student/password or admin/password</p>
+      <p class="text-sm text-stone-500 mb-6">Use <strong>student/password</strong> or <strong>admin/password</strong></p>
       <div class="space-y-4">
-        <input id="username" type="text" placeholder="Username" class="input-field w-full">
-        <input id="password" type="password" placeholder="Password" class="input-field w-full">
+        <input id="username" type="text" placeholder="Username" class="input-field w-full" autocomplete="off">
+        <input id="password" type="password" placeholder="Password" class="input-field w-full" autocomplete="off">
         <button onclick="login()" class="w-full py-2.5 rounded-lg font-bold uppercase tracking-wide tu-gold hover:brightness-95">Login</button>
-        <p id="loginError" class="hidden text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">Invalid credentials.</p>
+        <p id="loginError" class="hidden text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">Invalid credentials. Try student/password or admin/password.</p>
       </div>
     </section>
 
@@ -37,17 +36,23 @@
         <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4 border-b pb-4 mb-5">
           <div>
             <h2 class="text-2xl font-black">Student Dashboard</h2>
-            <p class="text-sm text-stone-500">For questions, contact Angela McDermott (amcdermott@towson.edu)</p>
+            <p class="text-sm text-stone-500">Create, track, and edit your travel requests.</p>
           </div>
-          <button onclick="startNewRequest()" class="px-4 py-2 rounded-lg font-bold text-sm uppercase tracking-wide tu-gold hover:brightness-95">New Request</button>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <input id="studentSearch" type="text" oninput="renderStudentRequests()" placeholder="Search by trip or destination" class="input-field w-full sm:w-64">
+            <button onclick="startNewRequest()" class="px-4 py-2 rounded-lg font-bold text-sm uppercase tracking-wide tu-gold hover:brightness-95">New Request</button>
+          </div>
         </div>
-        <div id="statusAlerts"></div>
+
+        <div id="statusAlerts" class="mb-4"></div>
+
         <div class="overflow-x-auto border rounded-xl mb-6">
           <table class="w-full text-left min-w-[720px]">
             <thead class="bg-stone-100 text-xs uppercase tracking-wide text-stone-600">
               <tr>
                 <th class="p-3">Trip</th>
                 <th class="p-3">Destination</th>
+                <th class="p-3">Dates</th>
                 <th class="p-3">Status</th>
                 <th class="p-3 text-right">Action</th>
               </tr>
@@ -55,246 +60,117 @@
             <tbody id="studentStatusTable"></tbody>
           </table>
         </div>
+
+        <div>
+          <h3 class="font-bold text-sm uppercase tracking-wide text-stone-600 mb-2">Notification History</h3>
+          <div id="notificationLog" class="rounded-xl border bg-stone-50 max-h-40 overflow-y-auto text-sm"></div>
+        </div>
       </div>
 
       <div id="requestFormSection" class="hidden">
-        <div class="student-form-shell">
-          <div class="student-form-hero">
-            <span class="student-eyebrow">Towson University - CIS Department</span>
-            <h3>Student Travel <em>Pre-Authorization</em></h3>
-            <p>Complete this form before official departmental travel processing. Information is routed through the student workflow for review.</p>
-            <div class="student-hero-actions">
-              <button onclick="cancelForm()" class="student-link-btn">Cancel</button>
+        <div class="flex items-start justify-between gap-4 mb-6">
+          <div>
+            <h3 class="text-xl font-black">Travel Request Form</h3>
+            <p class="text-sm text-stone-500">Complete all four steps before final submission.</p>
+            <div class="mt-2 flex items-center gap-2">
+              <button onclick="openImportMicrosoftFormDialog()" type="button" class="px-3 py-1.5 rounded-lg bg-stone-200 hover:bg-stone-300 text-xs font-semibold">Import Microsoft Form</button>
+              <span class="text-xs text-stone-500">Use exported Responses file (.xlsx/.xls/.csv)</span>
             </div>
+            <input id="msFormImportInput" type="file" class="hidden" accept=".xlsx,.xls,.csv" onchange="importFromMicrosoftForm(event)">
           </div>
-          <div class="student-progress-wrap">
-            <div id="studentProgressFill" class="student-progress-fill"></div>
-          </div>
+          <button onclick="cancelForm()" class="text-sm text-stone-500 hover:text-stone-800 underline">Cancel</button>
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6 text-[11px] font-semibold uppercase tracking-[0.08em]">
-          <div id="stepTab1" class="step-tab step-active">1. Traveler</div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6 text-xs font-bold uppercase tracking-wide">
+          <div id="stepTab1" class="step-tab step-active">1. Personal</div>
           <div id="stepTab2" class="step-tab">2. Trip</div>
           <div id="stepTab3" class="step-tab">3. Expenses</div>
-          <div id="stepTab4" class="step-tab">4. Funding & Docs</div>
+          <div id="stepTab4" class="step-tab">4. Documents</div>
         </div>
 
         <form id="requestForm" onsubmit="event.preventDefault()" class="space-y-5">
-          <section id="step1" class="step-content student-card">
-            <div class="student-card-header">
-              <span class="student-badge">1</span>
-              <h4>Student Traveler Information</h4>
-            </div>
-            <div class="student-card-body">
-              <div class="student-grid two-col">
-                <div class="student-field">
-                  <label for="studentName">Student Name <span>*</span></label>
-                  <input id="studentName" type="text" required placeholder="Full legal name" class="input-field w-full">
-                </div>
-                <div class="student-field">
-                  <label for="studentID">Student TUID# <span>*</span></label>
-                  <input id="studentID" type="text" required placeholder="900XXXXXXX" class="input-field w-full">
-                </div>
-                <div class="student-field">
-                  <label for="studentEmail">TU Email Address <span>*</span></label>
-                  <input id="studentEmail" type="email" required placeholder="netid@students.towson.edu" class="input-field w-full">
-                </div>
-                <div class="student-field">
-                  <label for="homeDept">Home Department <span>*</span></label>
-                  <input id="homeDept" type="text" required placeholder="Computer & Information Sciences" class="input-field w-full">
-                </div>
-                <div class="student-field span-two">
-                  <label for="studentAddress">Mailing Address for Reimbursement <span>*</span></label>
-                  <input id="studentAddress" type="text" required placeholder="Street, City, State, ZIP" class="input-field w-full">
-                  <p class="field-hint">Use the address where reimbursement checks should be mailed.</p>
-                </div>
+          <section id="step1" class="step-content space-y-4">
+            <input id="studentName" type="text" required placeholder="Full Name *" class="input-field w-full">
+            <input id="studentEmail" type="email" required placeholder="Towson Email *" class="input-field w-full">
+            <input id="studentID" type="text" required placeholder="T-ID Number *" class="input-field w-full">
+          </section>
+
+          <section id="step2" class="step-content hidden space-y-4">
+            <input id="tripName" type="text" required placeholder="Trip Name *" class="input-field w-full">
+            <input id="destination" type="text" required placeholder="Destination *" class="input-field w-full">
+            <textarea id="purpose" required placeholder="Purpose of travel *" class="input-field w-full min-h-24"></textarea>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs font-semibold text-stone-600">Start Date *</label>
+                <input id="startDate" type="date" required class="input-field w-full">
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-stone-600">End Date *</label>
+                <input id="endDate" type="date" required class="input-field w-full">
               </div>
             </div>
           </section>
 
-          <section id="step2" class="step-content hidden student-card">
-            <div class="student-card-header">
-              <span class="student-badge">2</span>
-              <h4>Trip Information</h4>
+          <section id="step3" class="step-content hidden space-y-4">
+            <p class="text-sm font-bold text-stone-700">Expense Breakdown</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input id="expReg" type="number" min="0" step="0.01" oninput="calculateTotal()" placeholder="Registration Fee" class="input-field expense-input">
+              <input id="expAir" type="number" min="0" step="0.01" oninput="calculateTotal()" placeholder="Airfare" class="input-field expense-input">
+              <input id="expLodging" type="number" min="0" step="0.01" oninput="calculateTotal()" placeholder="Lodging" class="input-field expense-input">
+              <input id="expMeals" type="number" min="0" step="0.01" oninput="calculateTotal()" placeholder="Meals" class="input-field expense-input">
             </div>
-            <div class="student-card-body">
-              <div class="student-callout student-callout-warn">Have you verified this trip is eligible for department travel support? Ineligible requests may be returned for revision.</div>
-
-              <div class="student-field">
-                <label>Is this an international trip?</label>
-                <div class="student-radio-row">
-                  <label class="student-radio">
-                    <input type="radio" name="intl" value="Yes" onchange="toggleIntlNote(true)">
-                    <span>Yes</span>
-                  </label>
-                  <label class="student-radio">
-                    <input type="radio" name="intl" value="No" onchange="toggleIntlNote(false)" checked>
-                    <span>No</span>
-                  </label>
-                </div>
-              </div>
-
-              <div id="intlNote" class="student-callout student-callout-info hidden">
-                International travel may require an approved waiver. Upload that approval document in Step 4.
-              </div>
-
-              <div class="student-grid two-col">
-                <div class="student-field span-two">
-                  <label for="tripName">Trip / Conference Name <span>*</span></label>
-                  <input id="tripName" type="text" required placeholder="2026 ACM SIGCSE Technical Symposium" class="input-field w-full">
-                </div>
-                <div class="student-field">
-                  <label for="destination">Destination <span>*</span></label>
-                  <input id="destination" type="text" required placeholder="City, State or City, Country" class="input-field w-full">
-                </div>
-                <div class="student-field">
-                  <label for="purpose">Purpose of Travel <span>*</span></label>
-                  <textarea id="purpose" required placeholder="Presenting research at conference" class="input-field w-full min-h-[88px]"></textarea>
-                </div>
-                <div class="student-field">
-                  <label for="startDate">Departure Date <span>*</span></label>
-                  <input id="startDate" type="date" required class="input-field w-full">
-                </div>
-                <div class="student-field">
-                  <label for="endDate">Return Date <span>*</span></label>
-                  <input id="endDate" type="date" required class="input-field w-full">
-                </div>
-              </div>
+            <div class="flex items-center justify-between rounded-xl border bg-stone-50 p-4">
+              <span class="font-bold">Estimated Total</span>
+              <span class="text-2xl font-black tu-gold-text">$<span id="displayTotal">0.00</span></span>
             </div>
+            <input id="cost" type="hidden" value="0">
           </section>
 
-          <section id="step3" class="step-content hidden student-card">
-            <div class="student-card-header">
-              <span class="student-badge">3</span>
-              <h4>Estimated Expenses</h4>
+          <section id="step4" class="step-content hidden space-y-4">
+            <div>
+              <label class="text-sm font-bold text-stone-700">Supporting Document (Agenda, Brochure, etc.)</label>
+              <input id="docUpload" type="file" class="input-field w-full">
+              <p class="text-xs text-stone-500 mt-1">Prototype note: file is saved locally in your browser storage for admin preview.</p>
             </div>
-            <div class="student-card-body">
-              <div class="student-callout student-callout-info">Funding guidance: department reimbursement is capped, and totals above internal limits may be reduced during review.</div>
-
-              <div class="expense-table">
-                <div class="expense-head">Category</div>
-                <div class="expense-head">Description</div>
-                <div class="expense-head">Amount ($)</div>
-
-                <div class="expense-label">Registration Fee</div>
-                <div class="expense-note">Conference registration rate</div>
-                <input id="expReg" type="number" min="0" step="0.01" oninput="calculateTotal()" placeholder="0.00" class="input-field">
-
-                <div class="expense-label">Hotel / Lodging</div>
-                <div class="expense-note">Estimated room total</div>
-                <input id="expLodging" type="number" min="0" step="0.01" oninput="calculateTotal()" placeholder="0.00" class="input-field">
-
-                <div class="expense-label">Airfare</div>
-                <div class="expense-note">Round-trip estimate</div>
-                <input id="expAir" type="number" min="0" step="0.01" oninput="calculateTotal()" placeholder="0.00" class="input-field">
-
-                <div class="expense-label">Taxi / Bus / Metro</div>
-                <div class="expense-note">Ground transportation</div>
-                <input id="expTransit" type="number" min="0" step="0.01" oninput="calculateTotal()" placeholder="0.00" class="input-field">
-
-                <div class="expense-label">Meals</div>
-                <div class="expense-note">Per diem estimate</div>
-                <input id="expMeals" type="number" min="0" step="0.01" oninput="calculateTotal()" placeholder="0.00" class="input-field">
-
-                <div class="expense-label">Parking / Tolls</div>
-                <div class="expense-note">Travel related parking/tolls</div>
-                <input id="expParking" type="number" min="0" step="0.01" oninput="calculateTotal()" placeholder="0.00" class="input-field">
-              </div>
-
-              <div class="student-mileage">
-                <div>
-                  <div class="mileage-title">Personal Vehicle Mileage</div>
-                  <p class="mileage-note">Mileage reimbursement rate currently set to $0.70 per mile.</p>
-                </div>
-                <div class="mileage-input-wrap">
-                  <input id="mileage" type="number" min="0" step="0.1" placeholder="Miles" oninput="calculateTotal()" class="input-field w-24">
-                  <span id="mileageCost">$0.00</span>
-                </div>
-              </div>
-
-              <div class="student-total">
-                <span>Estimated Total</span>
-                <strong>$<span id="displayTotal">0.00</span></strong>
-                <input id="cost" type="hidden" value="0">
-              </div>
-            </div>
-          </section>
-
-          <section id="step4" class="step-content hidden student-card">
-            <div class="student-card-header">
-              <span class="student-badge">4</span>
-              <h4>Funding & Supporting Documents</h4>
-            </div>
-            <div class="student-card-body">
-              <div class="student-field">
-                <label for="facultySponsor">Faculty Sponsor <span>*</span></label>
-                <input id="facultySponsor" type="text" required placeholder="Faculty member sponsoring this travel" class="input-field w-full">
-              </div>
-
-              <div class="student-field">
-                <label>Did you receive GSA / OURCI funding?</label>
-                <div class="student-radio-row">
-                  <label class="student-radio">
-                    <input type="radio" name="funding" value="Yes" onchange="toggleFunding(true)">
-                    <span>Yes</span>
-                  </label>
-                  <label class="student-radio">
-                    <input type="radio" name="funding" value="No" onchange="toggleFunding(false)" checked>
-                    <span>No</span>
-                  </label>
-                </div>
-              </div>
-
-              <div id="fundingSection" class="hidden student-callout student-callout-info">
-                <div class="student-field">
-                  <label for="fundingAmount">Funding Amount Awarded</label>
-                  <input id="fundingAmount" type="number" min="0" step="0.01" placeholder="600.00" class="input-field w-full">
-                </div>
-              </div>
-
-              <div class="student-field">
-                <label for="docUpload">Supporting Documents</label>
-                <input id="docUpload" type="file" class="input-field w-full" multiple>
-                <p class="field-hint">Upload acceptance letters, conference brochure, and any required travel approvals.</p>
-              </div>
-
-              <label class="student-check">
-                <input id="confirm" type="checkbox" required>
-                <span>I certify that the details in this request are complete and accurate.</span>
-              </label>
-            </div>
+            <label class="flex items-start gap-2 text-sm">
+              <input id="confirm" type="checkbox" required class="mt-1">
+              <span>I certify the details above are complete and accurate.</span>
+            </label>
           </section>
         </form>
 
-        <div class="student-form-actions">
-          <button id="backBtn" onclick="changeStep(-1)" class="hidden student-btn student-btn-muted">Back</button>
-          <div class="student-btn-group">
-            <button onclick="saveDraft()" class="student-btn student-btn-light">Save Draft</button>
-            <button id="nextBtn" onclick="changeStep(1)" class="student-btn student-btn-primary">Next</button>
-            <button id="submitBtn" onclick="submitRequest()" class="hidden student-btn student-btn-primary">Submit Request</button>
+        <div class="mt-8 pt-4 border-t flex flex-wrap justify-between gap-2">
+          <div class="flex gap-2">
+            <button id="backBtn" onclick="changeStep(-1)" class="hidden px-4 py-2 rounded-lg bg-stone-200 hover:bg-stone-300 text-sm font-semibold">Back</button>
+            <button onclick="saveDraft()" class="px-4 py-2 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-900 text-sm font-semibold">Save Draft</button>
+          </div>
+          <div class="flex gap-2">
+            <button id="nextBtn" onclick="changeStep(1)" class="px-5 py-2 rounded-lg tu-gold hover:brightness-95 text-sm font-bold">Next</button>
+            <button id="submitBtn" onclick="submitRequest()" class="hidden px-5 py-2 rounded-lg tu-gold hover:brightness-95 text-sm font-bold">Submit Request</button>
           </div>
         </div>
       </div>
     </section>
 
-    <section id="adminPortal" class="hidden bg-white rounded-2xl shadow-xl p-8">
-      <div class="border-b pb-4 mb-5 flex flex-col md:flex-row md:items-end md:justify-between gap-3">
-        <h2 class="text-2xl font-black">Admin Review Dashboard</h2>
-        <input
-          id="adminSearch"
-          type="text"
-          oninput="renderAdminTable()"
-          placeholder="Search student name, T-ID, email, or trip"
-          class="input-field w-full md:w-96"
-        >
+    <section id="adminPortal" class="hidden bg-white rounded-2xl shadow-xl p-6 md:p-8">
+      <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4 border-b pb-4 mb-5">
+        <div>
+          <h2 class="text-2xl font-black">Admin Review Dashboard</h2>
+          <p class="text-sm text-stone-500">Review submissions, approve, or request revision.</p>
+        </div>
+        <input id="adminSearch" type="text" oninput="renderAdminTable()" placeholder="Search student, T-ID, or trip" class="input-field w-full md:w-72">
       </div>
+
       <div class="overflow-x-auto border rounded-xl">
-        <table class="w-full text-left min-w-[1000px]">
-          <thead class="bg-stone-100 text-xs uppercase text-stone-600">
+        <table class="w-full text-left min-w-[1120px]">
+          <thead class="bg-stone-100 text-xs uppercase tracking-wide text-stone-600">
             <tr>
-              <th class="p-3">Student / T-ID</th>
-              <th class="p-3">Trip / Sponsor</th>
-              <th class="p-3">Total Cost</th>
+              <th class="p-3">Student</th>
+              <th class="p-3">Trip</th>
+              <th class="p-3">Reason for Trip</th>
+              <th class="p-3">Dates</th>
+              <th class="p-3">Cost</th>
+              <th class="p-3">Document</th>
               <th class="p-3">Status</th>
               <th class="p-3 text-right">Actions</th>
             </tr>
@@ -302,6 +178,8 @@
           <tbody id="adminTableBody"></tbody>
         </table>
       </div>
+
+      <button onclick="clearAllData()" class="mt-6 text-sm text-red-700 underline hover:text-red-900">Factory Reset: Clear All Local Data</button>
     </section>
   </main>
 
@@ -309,20 +187,20 @@
     <div class="w-full max-w-lg bg-white rounded-2xl shadow-2xl border-t-8 border-amber-400 p-7">
       <h3 class="text-xl font-black mb-3">Teaching Status Screening</h3>
       <p class="text-stone-700 mb-5">Have you received a contract to teach a class within the past six months?</p>
-      <div class="grid grid-cols-2 gap-3">
-        <button onclick="window.location.href='https://stratus.towson.edu'" class="py-2.5 rounded-lg bg-stone-900 text-white font-bold">Yes</button>
-        <button onclick="proceedToDashboard()" class="py-2.5 rounded-lg tu-gold font-bold">No</button>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <button onclick="redirectToStratus()" class="py-2.5 rounded-lg bg-stone-900 text-white font-bold hover:bg-stone-700">Yes</button>
+        <button onclick="proceedToDashboard()" class="py-2.5 rounded-lg tu-gold font-bold hover:brightness-95">No</button>
       </div>
     </div>
   </div>
 
-  <div id="adminDetailModal" class="hidden fixed inset-0 bg-black/60 p-4 z-50 items-center justify-center">
-    <div class="w-full max-w-5xl max-h-[92vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-      <div class="px-5 py-4 border-b flex items-center justify-between bg-stone-50">
-        <h3 id="adminDetailTitle" class="text-lg font-black text-stone-900">Submission Details</h3>
-        <button onclick="closeAdminDetails()" class="text-sm text-stone-600 hover:underline">Close</button>
+  <div id="fileViewerModal" class="hidden fixed inset-0 bg-black/70 p-4 z-50 items-center justify-center">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between border-b px-4 py-3">
+        <h3 id="fileViewerTitle" class="font-black text-lg">Submitted File</h3>
+        <button onclick="closeFileViewer()" class="text-sm text-stone-600 hover:underline">Close</button>
       </div>
-      <div id="adminDetailContent" class="p-5 overflow-y-auto"></div>
+      <div id="fileViewerBody" class="p-4 overflow-auto"></div>
     </div>
   </div>
 

@@ -1,195 +1,192 @@
 const DATA_KEY = "tu_travel_data";
+const LOG_KEY = "tu_travel_logs";
+const STRATUS_LINK = "https://stratus.towson.edu";
 
-let submissions = loadSubmissions();
+let submissions = loadData();
+let notificationLog = loadLogs();
 let currentStep = 1;
 let editID = null;
+let currentRole = null;
 
-function byId(id) {
-  return document.getElementById(id);
-}
-
-function loadSubmissions() {
+function loadData() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(DATA_KEY));
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed.map((item) => ({
-      id: item.id,
-      name: item.name || "",
-      address: item.address || item.studentAddress || "",
-      tuid: item.tuid || item.tID || item.studentID || "",
-      email: item.email || item.studentEmail || "",
-      department: item.department || item.homeDept || "",
-      trip: item.trip || item.tripName || "",
-      destination: item.destination || item.dest || "",
-      purpose: item.purpose || "",
-      startDate: item.startDate || "",
-      endDate: item.endDate || "",
-      intl: item.intl || "No",
-      expenses: {
-        reg: Number(item.expenses?.reg ?? item.expReg ?? 0),
-        lodging: Number(item.expenses?.lodging ?? item.expLodging ?? 0),
-        air: Number(item.expenses?.air ?? item.expAir ?? 0),
-        transit: Number(item.expenses?.transit ?? item.expTransit ?? 0),
-        meals: Number(item.expenses?.meals ?? item.expMeals ?? 0),
-        parking: Number(item.expenses?.parking ?? item.expParking ?? 0),
-        mileage: Number(item.expenses?.mileage ?? item.mileage ?? 0)
-      },
-      total: Number(item.total || 0),
-      sponsor: item.sponsor || item.facultySponsor || "",
-      funding: item.funding || "No",
-      fundingAmount: Number(item.fundingAmount || 0),
-      docs: Array.isArray(item.docs)
-        ? item.docs
-        : item.doc
-          ? [item.doc]
-          : item.documentName
-            ? [item.documentName]
-            : [],
-      status: item.status || "Under Review"
-    }));
+    return JSON.parse(localStorage.getItem(DATA_KEY)) || [];
   } catch (_error) {
     return [];
   }
 }
 
-function persistSubmissions() {
+function loadLogs() {
+  try {
+    return JSON.parse(localStorage.getItem(LOG_KEY)) || [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function saveData() {
   localStorage.setItem(DATA_KEY, JSON.stringify(submissions));
 }
 
-function getCheckedValue(name) {
-  const checked = document.querySelector(`input[name="${name}"]:checked`);
-  return checked ? checked.value : "";
+function saveLogs() {
+  localStorage.setItem(LOG_KEY, JSON.stringify(notificationLog));
 }
 
-function setCheckedValue(name, value) {
-  const radios = document.querySelectorAll(`input[name="${name}"]`);
-  radios.forEach((radio) => {
-    radio.checked = radio.value === value;
-  });
+function escapeHTML(value) {
+  const text = String(value ?? "");
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function login() {
-  const user = byId("username").value.trim().toLowerCase();
-  const pass = byId("password").value;
-  const error = byId("loginError");
+  const username = document.getElementById("username").value.trim().toLowerCase();
+  const password = document.getElementById("password").value;
+  const loginError = document.getElementById("loginError");
 
-  if (user === "student" && pass === "password") {
-    error.classList.add("hidden");
-    byId("loginSection").classList.add("hidden");
-    byId("screeningModal").classList.remove("hidden");
-    byId("screeningModal").classList.add("flex");
+  if (username === "student" && password === "password") {
+    currentRole = "student";
+    loginError.classList.add("hidden");
+    showScreeningModal(true);
     return;
   }
 
-  if (user === "admin" && pass === "password") {
-    error.classList.add("hidden");
+  if (username === "admin" && password === "password") {
+    currentRole = "admin";
+    loginError.classList.add("hidden");
     showView("adminPortal");
     renderAdminTable();
     return;
   }
 
-  error.classList.remove("hidden");
+  loginError.classList.remove("hidden");
+}
+
+function showScreeningModal(show) {
+  const modal = document.getElementById("screeningModal");
+  if (show) {
+    modal.classList.remove("hidden");
+    modal.classList.add("flex");
+    document.getElementById("loginSection").classList.add("hidden");
+  } else {
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+  }
+}
+
+function redirectToStratus() {
+  window.location.href = STRATUS_LINK;
 }
 
 function proceedToDashboard() {
-  byId("screeningModal").classList.add("hidden");
-  byId("screeningModal").classList.remove("flex");
+  showScreeningModal(false);
   showView("studentDashboard");
   showStudentHome();
 }
 
-function showView(id) {
-  ["loginSection", "studentDashboard", "adminPortal"].forEach((viewId) => {
-    byId(viewId).classList.add("hidden");
-  });
+function logout() {
+  currentRole = null;
+  currentStep = 1;
+  editID = null;
+  showScreeningModal(false);
+  clearLoginInputs();
+  showView("loginSection");
+}
 
-  byId(id).classList.remove("hidden");
-  byId("logoutBtn").classList.toggle("hidden", id === "loginSection");
+function clearLoginInputs() {
+  document.getElementById("username").value = "";
+  document.getElementById("password").value = "";
+}
+
+function showView(viewID) {
+  ["loginSection", "studentDashboard", "adminPortal"].forEach((id) => {
+    const section = document.getElementById(id);
+    section.classList.add("hidden");
+  });
+  document.getElementById(viewID).classList.remove("hidden");
+
+  document.getElementById("logoutBtn").classList.toggle("hidden", viewID === "loginSection");
 }
 
 function showStudentHome() {
-  byId("requestFormSection").classList.add("hidden");
-  byId("studentHome").classList.remove("hidden");
+  document.getElementById("studentHome").classList.remove("hidden");
+  document.getElementById("requestFormSection").classList.add("hidden");
   renderStudentRequests();
+  renderNotifications();
+}
+
+function cancelForm() {
+  if (!confirm("Discard current unsaved changes and return to dashboard?")) {
+    return;
+  }
+  showStudentHome();
 }
 
 function startNewRequest() {
   editID = null;
   currentStep = 1;
-  byId("requestForm").reset();
-  setCheckedValue("intl", "No");
-  setCheckedValue("funding", "No");
-  toggleIntlNote(false);
-  toggleFunding(false);
-  byId("mileageCost").innerText = "$0.00";
-  byId("displayTotal").innerText = "0.00";
-  byId("cost").value = "0";
+  document.getElementById("requestForm").reset();
+  document.getElementById("displayTotal").innerText = "0.00";
+  document.getElementById("cost").value = "0";
 
-  byId("studentHome").classList.add("hidden");
-  byId("requestFormSection").classList.remove("hidden");
+  document.getElementById("studentHome").classList.add("hidden");
+  document.getElementById("requestFormSection").classList.remove("hidden");
   updateStepUI();
 }
 
-function cancelForm() {
-  showStudentHome();
-}
-
-function toggleIntlNote(show) {
-  byId("intlNote").classList.toggle("hidden", !show);
-}
-
-function toggleFunding(show) {
-  byId("fundingSection").classList.toggle("hidden", !show);
-}
-
 function calculateTotal() {
-  const reg = Number(byId("expReg").value || 0);
-  const lodging = Number(byId("expLodging").value || 0);
-  const air = Number(byId("expAir").value || 0);
-  const transit = Number(byId("expTransit").value || 0);
-  const meals = Number(byId("expMeals").value || 0);
-  const parking = Number(byId("expParking").value || 0);
-  const miles = Number(byId("mileage").value || 0);
+  const reg = Number(document.getElementById("expReg").value || 0);
+  const air = Number(document.getElementById("expAir").value || 0);
+  const lod = Number(document.getElementById("expLodging").value || 0);
+  const mel = Number(document.getElementById("expMeals").value || 0);
+  const total = reg + air + lod + mel;
 
-  const mileageCost = miles * 0.7;
-  byId("mileageCost").innerText = `$${mileageCost.toFixed(2)}`;
-
-  const total = reg + lodging + air + transit + meals + parking + mileageCost;
-  byId("displayTotal").innerText = total.toFixed(2);
-  byId("cost").value = total.toFixed(2);
+  document.getElementById("displayTotal").innerText = total.toFixed(2);
+  document.getElementById("cost").value = total.toFixed(2);
 }
 
-function validateStep() {
-  const section = byId(`step${currentStep}`);
-  const required = section.querySelectorAll("input[required], textarea[required], select[required]");
+function changeStep(delta) {
+  if (delta > 0 && !validateCurrentStep()) {
+    return;
+  }
+
+  const nextStep = currentStep + delta;
+  if (nextStep < 1 || nextStep > 4) {
+    return;
+  }
+
+  currentStep = nextStep;
+  updateStepUI();
+}
+
+function validateCurrentStep() {
+  const section = document.getElementById(`step${currentStep}`);
+  const requiredInputs = section.querySelectorAll("input[required], textarea[required]");
   let valid = true;
 
-  required.forEach((field) => {
-    let hasValue = false;
-
-    if (field.type === "checkbox") {
-      hasValue = field.checked;
-    } else {
-      hasValue = field.value.trim() !== "";
-    }
+  requiredInputs.forEach((input) => {
+    const isCheckbox = input.type === "checkbox";
+    const hasValue = isCheckbox ? input.checked : input.value.trim() !== "";
 
     if (!hasValue) {
-      field.classList.add("input-error");
+      input.classList.add("input-error");
       valid = false;
     } else {
-      field.classList.remove("input-error");
+      input.classList.remove("input-error");
     }
   });
 
-  if (currentStep === 2) {
-    const start = byId("startDate").value;
-    const end = byId("endDate").value;
-    if (start && end && end < start) {
-      byId("startDate").classList.add("input-error");
-      byId("endDate").classList.add("input-error");
+  if (valid && currentStep === 2) {
+    const startDate = document.getElementById("startDate").value;
+    const endDate = document.getElementById("endDate").value;
+    if (startDate && endDate && endDate < startDate) {
       valid = false;
+      document.getElementById("startDate").classList.add("input-error");
+      document.getElementById("endDate").classList.add("input-error");
+      alert("End date must be on or after the start date.");
     }
   }
 
@@ -200,114 +197,361 @@ function validateStep() {
   return valid;
 }
 
-function changeStep(delta) {
-  const next = currentStep + delta;
-  if (next < 1 || next > 4) {
-    return;
-  }
-
-  if (delta > 0 && !validateStep()) {
-    return;
-  }
-
-  currentStep = next;
-  updateStepUI();
-}
-
-function updateStudentProgress() {
-  const fill = byId("studentProgressFill");
-  if (!fill) {
-    return;
-  }
-  const progress = 8 + Math.round(((currentStep - 1) / 3) * 92);
-  fill.style.width = `${progress}%`;
-}
-
 function updateStepUI() {
-  document.querySelectorAll(".step-content").forEach((section) => section.classList.add("hidden"));
-  document.querySelectorAll(".step-tab").forEach((tab) => tab.classList.remove("step-active"));
+  document.querySelectorAll(".step-content").forEach((item) => item.classList.add("hidden"));
+  document.querySelectorAll(".step-tab").forEach((item) => item.classList.remove("step-active"));
 
-  byId(`step${currentStep}`).classList.remove("hidden");
-  byId(`stepTab${currentStep}`).classList.add("step-active");
+  document.getElementById(`step${currentStep}`).classList.remove("hidden");
+  document.getElementById(`stepTab${currentStep}`).classList.add("step-active");
 
-  byId("backBtn").classList.toggle("hidden", currentStep === 1);
-  byId("nextBtn").classList.toggle("hidden", currentStep === 4);
-  byId("submitBtn").classList.toggle("hidden", currentStep !== 4);
-
-  updateStudentProgress();
+  document.getElementById("backBtn").classList.toggle("hidden", currentStep === 1);
+  document.getElementById("nextBtn").classList.toggle("hidden", currentStep === 4);
+  document.getElementById("submitBtn").classList.toggle("hidden", currentStep !== 4);
 }
 
-function captureFormData(status) {
-  const selectedDocs = Array.from(byId("docUpload").files || []).map((file) => file.name);
-  const existing = submissions.find((item) => item.id === editID);
+function openImportMicrosoftFormDialog() {
+  const input = document.getElementById("msFormImportInput");
+  input.value = "";
+  input.click();
+}
+
+function normalizeHeader(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replaceAll("&", "and")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function normalizeCell(value) {
+  return String(value ?? "").trim();
+}
+
+function parseCSVLine(line) {
+  const output = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    const next = line[i + 1];
+
+    if (char === '"' && inQuotes && next === '"') {
+      current += '"';
+      i += 1;
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      output.push(current);
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  output.push(current);
+  return output;
+}
+
+function csvTextToRows(text) {
+  const lines = String(text ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .filter((line) => line.trim() !== "");
+
+  if (lines.length < 2) {
+    return [];
+  }
+
+  const headers = parseCSVLine(lines[0]).map((h) => h.trim());
+  const rows = [];
+
+  for (let i = 1; i < lines.length; i += 1) {
+    const cells = parseCSVLine(lines[i]);
+    const row = {};
+    headers.forEach((header, idx) => {
+      row[header] = normalizeCell(cells[idx]);
+    });
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function toISODate(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const utc = new Date(Math.round((value - 25569) * 86400 * 1000));
+    if (!Number.isNaN(utc.getTime())) {
+      return utc.toISOString().slice(0, 10);
+    }
+  }
+
+  const raw = String(value).trim();
+  if (!raw) {
+    return "";
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw;
+  }
+
+  const slash = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (slash) {
+    let year = Number(slash[3]);
+    if (year < 100) {
+      year += 2000;
+    }
+    const month = String(Number(slash[1])).padStart(2, "0");
+    const day = String(Number(slash[2])).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+
+  return "";
+}
+
+function toNumber(value) {
+  const number = Number(String(value ?? "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(number) ? number : 0;
+}
+
+function pickValue(row, aliases) {
+  for (const alias of aliases) {
+    const value = row[alias];
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return value;
+    }
+  }
+  return "";
+}
+
+function mapMSFormRowToFormData(rawRow) {
+  const row = {};
+  Object.keys(rawRow || {}).forEach((key) => {
+    row[normalizeHeader(key)] = rawRow[key];
+  });
 
   return {
-    id: editID || Date.now(),
-    name: byId("studentName").value.trim(),
-    address: byId("studentAddress").value.trim(),
-    tuid: byId("studentID").value.trim(),
-    email: byId("studentEmail").value.trim(),
-    department: byId("homeDept").value.trim(),
-    trip: byId("tripName").value.trim(),
-    destination: byId("destination").value.trim(),
-    purpose: byId("purpose").value.trim(),
-    startDate: byId("startDate").value,
-    endDate: byId("endDate").value,
-    intl: getCheckedValue("intl") || "No",
-    expenses: {
-      reg: Number(byId("expReg").value || 0),
-      lodging: Number(byId("expLodging").value || 0),
-      air: Number(byId("expAir").value || 0),
-      transit: Number(byId("expTransit").value || 0),
-      meals: Number(byId("expMeals").value || 0),
-      parking: Number(byId("expParking").value || 0),
-      mileage: Number(byId("mileage").value || 0)
-    },
-    total: Number(byId("cost").value || 0),
-    sponsor: byId("facultySponsor").value.trim(),
-    funding: getCheckedValue("funding") || "No",
-    fundingAmount: Number(byId("fundingAmount").value || 0),
-    docs: selectedDocs.length ? selectedDocs : existing?.docs || [],
-    status
+    name: normalizeCell(pickValue(row, ["name", "fullname", "studentname", "whatisyourname", "whatisyourfullname"])),
+    email: normalizeCell(pickValue(row, ["email", "emailaddress", "towsonemail", "studentemail", "whatisyourtowsonemail"])),
+    tID: normalizeCell(pickValue(row, ["tid", "tidnumber", "studentid", "towsonid", "towsonuid", "tuid", "whatisyourtidnumber"])),
+    tripName: normalizeCell(pickValue(row, ["tripname", "nameoftrip", "travelrequestname", "conferenceeventname", "eventname"])),
+    destination: normalizeCell(pickValue(row, ["destination", "traveldestination", "citystatecountry", "wheredoyoutravel"])),
+    purpose: normalizeCell(pickValue(row, ["purpose", "purposeoftravel", "reasonfortrip", "travelpurpose", "tripreason"])),
+    startDate: toISODate(pickValue(row, ["startdate", "tripstartdate", "travelstartdate", "departuredate"])),
+    endDate: toISODate(pickValue(row, ["enddate", "tripenddate", "travelenddate", "returndate"])),
+    expReg: toNumber(pickValue(row, ["registrationfee", "registration", "regfee"])),
+    expAir: toNumber(pickValue(row, ["airfare", "flight", "air"])),
+    expLodging: toNumber(pickValue(row, ["lodging", "hotel", "accommodation"])),
+    expMeals: toNumber(pickValue(row, ["meals", "mealcost", "food"]))
   };
 }
 
-function upsertSubmission(payload) {
-  if (editID) {
-    const idx = submissions.findIndex((item) => item.id === editID);
-    if (idx >= 0) {
-      submissions[idx] = payload;
-    }
-  } else {
-    submissions.push(payload);
+async function importFromMicrosoftForm(event) {
+  const file = event.target.files?.[0];
+  if (!file) {
+    return;
   }
-  persistSubmissions();
+
+  try {
+    let rows = [];
+    const fileName = file.name.toLowerCase();
+
+    if (fileName.endsWith(".csv")) {
+      const text = await file.text();
+      rows = csvTextToRows(text);
+    } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
+      if (typeof XLSX === "undefined") {
+        alert("Spreadsheet parser is not available. Refresh and try again.");
+        return;
+      }
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+    } else {
+      alert("Unsupported file type. Use a Microsoft Forms export file (.xlsx, .xls, or .csv).");
+      return;
+    }
+
+    if (!rows.length) {
+      alert("No response rows were found in this file.");
+      return;
+    }
+
+    const latestRow = rows[rows.length - 1];
+    const mapped = mapMSFormRowToFormData(latestRow);
+
+    document.getElementById("studentName").value = mapped.name;
+    document.getElementById("studentEmail").value = mapped.email;
+    document.getElementById("studentID").value = mapped.tID;
+    document.getElementById("tripName").value = mapped.tripName;
+    document.getElementById("destination").value = mapped.destination;
+    document.getElementById("purpose").value = mapped.purpose;
+    document.getElementById("startDate").value = mapped.startDate;
+    document.getElementById("endDate").value = mapped.endDate;
+    document.getElementById("expReg").value = mapped.expReg || "";
+    document.getElementById("expAir").value = mapped.expAir || "";
+    document.getElementById("expLodging").value = mapped.expLodging || "";
+    document.getElementById("expMeals").value = mapped.expMeals || "";
+    calculateTotal();
+
+    document.querySelectorAll(".input-error").forEach((node) => node.classList.remove("input-error"));
+    addNotification(`Imported Microsoft Form data from ${file.name}.`);
+    alert("Microsoft Form data imported into the travel request form.");
+  } catch (_error) {
+    alert("Unable to import that Microsoft Form file. Please verify the file format and try again.");
+  } finally {
+    event.target.value = "";
+  }
 }
 
-function saveDraft() {
-  const payload = captureFormData("Draft");
-  upsertSubmission(payload);
-  editID = null;
-  showStudentHome();
+function collectFormData() {
+  return {
+    name: document.getElementById("studentName").value.trim(),
+    email: document.getElementById("studentEmail").value.trim(),
+    tID: document.getElementById("studentID").value.trim(),
+    trip: document.getElementById("tripName").value.trim(),
+    destination: document.getElementById("destination").value.trim(),
+    purpose: document.getElementById("purpose").value.trim(),
+    startDate: document.getElementById("startDate").value,
+    endDate: document.getElementById("endDate").value,
+    expenses: {
+      registrationFee: Number(document.getElementById("expReg").value || 0),
+      airfare: Number(document.getElementById("expAir").value || 0),
+      lodging: Number(document.getElementById("expLodging").value || 0),
+      meals: Number(document.getElementById("expMeals").value || 0)
+    },
+    total: Number(document.getElementById("cost").value || 0),
+    documentName: document.getElementById("docUpload").files[0]?.name || "No file uploaded",
+    comment: ""
+  };
 }
 
-function submitRequest() {
-  const startStep = currentStep;
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Unable to read selected file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function attachDocumentData(payload, existingRequest = null) {
+  const fileInput = document.getElementById("docUpload");
+  const file = fileInput.files?.[0];
+
+  if (file) {
+    const dataURL = await readFileAsDataURL(file);
+    payload.documentName = file.name;
+    payload.documentType = file.type || "application/octet-stream";
+    payload.documentDataURL = dataURL;
+    return payload;
+  }
+
+  if (existingRequest?.documentDataURL) {
+    payload.documentName = existingRequest.documentName || "Uploaded document";
+    payload.documentType = existingRequest.documentType || "application/octet-stream";
+    payload.documentDataURL = existingRequest.documentDataURL;
+  }
+
+  return payload;
+}
+
+function addNotification(message) {
+  const now = new Date();
+  notificationLog.push({
+    id: now.getTime(),
+    time: now.toLocaleString(),
+    message
+  });
+  saveLogs();
+}
+
+async function saveDraft() {
+  try {
+    const payload = collectFormData();
+    payload.status = "Draft";
+
+    if (editID) {
+      const idx = submissions.findIndex((item) => item.id === editID);
+      if (idx >= 0) {
+        await attachDocumentData(payload, submissions[idx]);
+        submissions[idx] = { ...submissions[idx], ...payload, id: editID };
+      }
+    } else {
+      await attachDocumentData(payload);
+      payload.id = Date.now();
+      submissions.push(payload);
+      editID = payload.id;
+    }
+
+    saveData();
+    addNotification(`Draft saved for ${payload.trip || "Untitled Trip"}.`);
+    showStudentHome();
+  } catch (_error) {
+    alert("Could not save the selected file. Please try again.");
+  }
+}
+
+async function submitRequest() {
+  const originalStep = currentStep;
   for (let step = 1; step <= 4; step += 1) {
     currentStep = step;
     updateStepUI();
-    if (!validateStep()) {
+    if (!validateCurrentStep()) {
       return;
     }
   }
 
-  currentStep = startStep;
+  currentStep = originalStep;
   updateStepUI();
 
-  const payload = captureFormData("Under Review");
-  upsertSubmission(payload);
-  editID = null;
-  showStudentHome();
+  try {
+    const payload = collectFormData();
+    payload.status = "Under Review";
+
+    if (editID) {
+      const idx = submissions.findIndex((item) => item.id === editID);
+      if (idx >= 0) {
+        await attachDocumentData(payload, submissions[idx]);
+        payload.comment = submissions[idx].comment || "";
+        submissions[idx] = { ...submissions[idx], ...payload, id: editID };
+      }
+    } else {
+      await attachDocumentData(payload);
+      payload.id = Date.now();
+      submissions.push(payload);
+    }
+
+    saveData();
+    addNotification(`Request submitted: ${payload.trip}.`);
+    editID = null;
+    showStudentHome();
+  } catch (_error) {
+    alert("Could not submit because the file could not be processed. Please try again.");
+  }
 }
 
 function editRequest(id) {
@@ -319,228 +563,224 @@ function editRequest(id) {
   editID = id;
   currentStep = 1;
 
-  byId("studentName").value = request.name || "";
-  byId("studentAddress").value = request.address || "";
-  byId("studentID").value = request.tuid || "";
-  byId("studentEmail").value = request.email || "";
-  byId("homeDept").value = request.department || "";
+  document.getElementById("studentName").value = request.name || "";
+  document.getElementById("studentEmail").value = request.email || "";
+  document.getElementById("studentID").value = request.tID || "";
+  document.getElementById("tripName").value = request.trip || "";
+  document.getElementById("destination").value = request.destination || "";
+  document.getElementById("purpose").value = request.purpose || "";
+  document.getElementById("startDate").value = request.startDate || "";
+  document.getElementById("endDate").value = request.endDate || "";
+  document.getElementById("expReg").value = request.expenses?.registrationFee ?? "";
+  document.getElementById("expAir").value = request.expenses?.airfare ?? "";
+  document.getElementById("expLodging").value = request.expenses?.lodging ?? "";
+  document.getElementById("expMeals").value = request.expenses?.meals ?? "";
+  document.getElementById("cost").value = Number(request.total || 0).toFixed(2);
+  document.getElementById("displayTotal").innerText = Number(request.total || 0).toFixed(2);
+  document.getElementById("docUpload").value = "";
+  document.getElementById("confirm").checked = false;
 
-  byId("tripName").value = request.trip || "";
-  byId("destination").value = request.destination || "";
-  byId("purpose").value = request.purpose || "";
-  byId("startDate").value = request.startDate || "";
-  byId("endDate").value = request.endDate || "";
-
-  setCheckedValue("intl", request.intl || "No");
-  toggleIntlNote((request.intl || "No") === "Yes");
-
-  byId("expReg").value = request.expenses?.reg || "";
-  byId("expLodging").value = request.expenses?.lodging || "";
-  byId("expAir").value = request.expenses?.air || "";
-  byId("expTransit").value = request.expenses?.transit || "";
-  byId("expMeals").value = request.expenses?.meals || "";
-  byId("expParking").value = request.expenses?.parking || "";
-  byId("mileage").value = request.expenses?.mileage || "";
-
-  byId("facultySponsor").value = request.sponsor || "";
-  setCheckedValue("funding", request.funding || "No");
-  toggleFunding((request.funding || "No") === "Yes");
-  byId("fundingAmount").value = request.fundingAmount || "";
-  byId("confirm").checked = false;
-
-  calculateTotal();
-  byId("studentHome").classList.add("hidden");
-  byId("requestFormSection").classList.remove("hidden");
+  document.getElementById("studentHome").classList.add("hidden");
+  document.getElementById("requestFormSection").classList.remove("hidden");
   updateStepUI();
-}
-
-function escapeHTML(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function formatCurrency(value) {
-  return Number(value || 0).toFixed(2);
-}
-
-function normalizeDocs(docs) {
-  return Array.isArray(docs) ? docs : [];
-}
-
-function statusBadge(status) {
-  const s = status || "Under Review";
-  if (s === "Approved") {
-    return "bg-green-100 text-green-800";
-  }
-  if (s === "Revision Needed") {
-    return "bg-red-100 text-red-700";
-  }
-  if (s === "Draft") {
-    return "bg-stone-200 text-stone-700";
-  }
-  return "bg-amber-100 text-amber-800";
 }
 
 function renderStudentRequests() {
-  const tbody = byId("studentStatusTable");
-  if (!submissions.length) {
-    tbody.innerHTML = '<tr class="border-t"><td class="p-3 text-sm text-stone-500 italic" colspan="4">No requests yet.</td></tr>';
+  const searchTerm = document.getElementById("studentSearch").value.trim().toLowerCase();
+  const tableBody = document.getElementById("studentStatusTable");
+  const alerts = document.getElementById("statusAlerts");
+
+  const filtered = submissions.filter((request) => {
+    const trip = (request.trip || "").toLowerCase();
+    const destination = (request.destination || "").toLowerCase();
+    const purpose = (request.purpose || "").toLowerCase();
+    return trip.includes(searchTerm) || destination.includes(searchTerm) || purpose.includes(searchTerm);
+  });
+
+  alerts.innerHTML = "";
+  tableBody.innerHTML = "";
+
+  const revisionItems = filtered.filter((item) => item.status === "Revision Needed");
+  revisionItems.forEach((item) => {
+    alerts.innerHTML += `<div class="alert-badge"><strong>Revision Needed:</strong> ${escapeHTML(item.trip)}${item.comment ? ` | Note: ${escapeHTML(item.comment)}` : ""}</div>`;
+  });
+
+  if (filtered.length === 0) {
+    tableBody.innerHTML = '<tr><td class="p-4 text-stone-500 italic" colspan="5">No requests found.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = submissions
-    .slice()
+  filtered
     .sort((a, b) => b.id - a.id)
-    .map(
-      (s) => `
-    <tr class="border-t">
-      <td class="p-3 font-bold">${escapeHTML(s.trip || "Untitled Trip")}</td>
-      <td class="p-3">${escapeHTML(s.destination || "-")}</td>
-      <td class="p-3"><span class="px-2 py-1 rounded-full text-xs ${statusBadge(s.status)}">${escapeHTML(s.status || "Under Review")}</span></td>
-      <td class="p-3 text-right"><button onclick="editRequest(${s.id})" class="text-blue-600 underline">Edit</button></td>
-    </tr>
-  `
-    )
-    .join("");
+    .forEach((item) => {
+      const statusClass = `status-${item.status.toLowerCase().replaceAll(" ", "-")}`;
+      const row = document.createElement("tr");
+      row.className = "border-t";
+      row.innerHTML = `
+        <td class="p-3 font-semibold">${escapeHTML(item.trip || "Untitled")}</td>
+        <td class="p-3">${escapeHTML(item.destination || "-")}</td>
+        <td class="p-3 text-sm text-stone-600">${escapeHTML(item.startDate || "-")} to ${escapeHTML(item.endDate || "-")}</td>
+        <td class="p-3"><span class="status-pill ${statusClass}">${escapeHTML(item.status)}</span></td>
+        <td class="p-3 text-right">
+          <button class="text-sm text-blue-700 font-semibold hover:underline" onclick="editRequest(${item.id})">Edit</button>
+        </td>
+      `;
+      tableBody.appendChild(row);
+    });
 }
 
-function updateStatus(id, nextStatus) {
-  const row = submissions.find((item) => item.id === id);
-  if (!row) {
+function renderNotifications() {
+  const container = document.getElementById("notificationLog");
+  container.innerHTML = "";
+
+  if (notificationLog.length === 0) {
+    container.innerHTML = '<div class="note-item text-stone-500 italic">No notifications yet.</div>';
     return;
   }
 
-  row.status = nextStatus;
-  persistSubmissions();
-  renderAdminTable();
-  renderStudentRequests();
-}
-
-function openAdminDetails(id) {
-  const row = submissions.find((item) => item.id === id);
-  if (!row) {
-    return;
-  }
-
-  const docs = normalizeDocs(row.docs);
-  const expenses = row.expenses || {};
-  const docItems = docs.length
-    ? docs.map((name) => `<li class="text-sm text-stone-700">• ${escapeHTML(name)}</li>`).join("")
-    : '<li class="text-sm text-stone-500 italic">No files uploaded</li>';
-
-  byId("adminDetailTitle").textContent = `${row.trip || "Travel Request"} - Full Submission`;
-  byId("adminDetailContent").innerHTML = `
-    <div class="grid md:grid-cols-2 gap-4">
-      <section class="rounded-xl border border-stone-200 p-4">
-        <h4 class="font-black text-stone-800 mb-2">Student Information</h4>
-        <div class="space-y-1 text-sm">
-          <div><span class="font-semibold text-stone-600">Name:</span> ${escapeHTML(row.name || "-")}</div>
-          <div><span class="font-semibold text-stone-600">TUID:</span> ${escapeHTML(row.tuid || "-")}</div>
-          <div><span class="font-semibold text-stone-600">Email:</span> ${escapeHTML(row.email || "-")}</div>
-          <div><span class="font-semibold text-stone-600">Department:</span> ${escapeHTML(row.department || "-")}</div>
-          <div><span class="font-semibold text-stone-600">Address:</span> ${escapeHTML(row.address || "-")}</div>
-        </div>
-      </section>
-
-      <section class="rounded-xl border border-stone-200 p-4">
-        <h4 class="font-black text-stone-800 mb-2">Trip Information</h4>
-        <div class="space-y-1 text-sm">
-          <div><span class="font-semibold text-stone-600">Trip / Event:</span> ${escapeHTML(row.trip || "-")}</div>
-          <div><span class="font-semibold text-stone-600">Destination:</span> ${escapeHTML(row.destination || "-")}</div>
-          <div><span class="font-semibold text-stone-600">Purpose:</span> ${escapeHTML(row.purpose || "-")}</div>
-          <div><span class="font-semibold text-stone-600">Departure:</span> ${escapeHTML(row.startDate || "-")}</div>
-          <div><span class="font-semibold text-stone-600">Return:</span> ${escapeHTML(row.endDate || "-")}</div>
-          <div><span class="font-semibold text-stone-600">International:</span> ${escapeHTML(row.intl || "No")}</div>
-        </div>
-      </section>
-
-      <section class="rounded-xl border border-stone-200 p-4 md:col-span-2">
-        <h4 class="font-black text-stone-800 mb-3">Expense Breakdown</h4>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-          <div class="rounded-lg bg-stone-50 p-2"><span class="text-stone-500">Registration</span><div class="font-semibold">$${formatCurrency(expenses.reg)}</div></div>
-          <div class="rounded-lg bg-stone-50 p-2"><span class="text-stone-500">Lodging</span><div class="font-semibold">$${formatCurrency(expenses.lodging)}</div></div>
-          <div class="rounded-lg bg-stone-50 p-2"><span class="text-stone-500">Airfare</span><div class="font-semibold">$${formatCurrency(expenses.air)}</div></div>
-          <div class="rounded-lg bg-stone-50 p-2"><span class="text-stone-500">Transit</span><div class="font-semibold">$${formatCurrency(expenses.transit)}</div></div>
-          <div class="rounded-lg bg-stone-50 p-2"><span class="text-stone-500">Meals</span><div class="font-semibold">$${formatCurrency(expenses.meals)}</div></div>
-          <div class="rounded-lg bg-stone-50 p-2"><span class="text-stone-500">Parking/Tolls</span><div class="font-semibold">$${formatCurrency(expenses.parking)}</div></div>
-          <div class="rounded-lg bg-stone-50 p-2"><span class="text-stone-500">Mileage (miles)</span><div class="font-semibold">${escapeHTML(expenses.mileage ?? 0)}</div></div>
-          <div class="rounded-lg bg-stone-100 p-2 border border-stone-300"><span class="text-stone-700 font-semibold">Estimated Total</span><div class="font-black text-stone-900">$${formatCurrency(row.total)}</div></div>
-        </div>
-      </section>
-
-      <section class="rounded-xl border border-stone-200 p-4">
-        <h4 class="font-black text-stone-800 mb-2">Funding & Sponsorship</h4>
-        <div class="space-y-1 text-sm">
-          <div><span class="font-semibold text-stone-600">Faculty Sponsor:</span> ${escapeHTML(row.sponsor || "-")}</div>
-          <div><span class="font-semibold text-stone-600">GSA / OURCI Funding:</span> ${escapeHTML(row.funding || "No")}</div>
-          <div><span class="font-semibold text-stone-600">Funding Amount:</span> $${formatCurrency(row.fundingAmount)}</div>
-          <div><span class="font-semibold text-stone-600">Status:</span> ${escapeHTML(row.status || "Under Review")}</div>
-        </div>
-      </section>
-
-      <section class="rounded-xl border border-stone-200 p-4">
-        <h4 class="font-black text-stone-800 mb-2">Supporting Documents</h4>
-        <ul class="space-y-1">
-          ${docItems}
-        </ul>
-      </section>
-    </div>
-  `;
-
-  byId("adminDetailModal").classList.remove("hidden");
-  byId("adminDetailModal").classList.add("flex");
-}
-
-function closeAdminDetails() {
-  byId("adminDetailModal").classList.add("hidden");
-  byId("adminDetailModal").classList.remove("flex");
+  notificationLog
+    .slice()
+    .reverse()
+    .forEach((entry) => {
+      container.innerHTML += `<div class="note-item"><div class="text-xs text-stone-500">${escapeHTML(entry.time)}</div><div>${escapeHTML(entry.message)}</div></div>`;
+    });
 }
 
 function renderAdminTable() {
-  const tbody = byId("adminTableBody");
-  const search = (byId("adminSearch")?.value || "").trim().toLowerCase();
-  const filtered = submissions.filter((s) => {
-    const haystack = `${s.name || ""} ${s.tuid || ""} ${s.email || ""} ${s.trip || ""} ${s.sponsor || ""} ${s.destination || ""}`.toLowerCase();
-    return haystack.includes(search);
+  const searchTerm = document.getElementById("adminSearch").value.trim().toLowerCase();
+  const tbody = document.getElementById("adminTableBody");
+
+  const filtered = submissions.filter((item) => {
+    if (item.status === "Draft") {
+      return false;
+    }
+    const blob = `${item.name} ${item.email} ${item.tID} ${item.trip} ${item.destination} ${item.purpose}`.toLowerCase();
+    return blob.includes(searchTerm);
   });
 
-  if (!filtered.length) {
-    const emptyMessage = submissions.length ? "No matching students found." : "No submissions yet.";
-    tbody.innerHTML = `<tr class="border-t"><td class="p-3 text-sm text-stone-500 italic" colspan="5">${emptyMessage}</td></tr>`;
+  tbody.innerHTML = "";
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td class="p-4 text-stone-500 italic" colspan="8">No submissions match your search.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = filtered
-    .slice()
+  filtered
     .sort((a, b) => b.id - a.id)
-    .map(
-      (s) => `
-    <tr class="border-t">
-      <td class="p-3"><strong>${escapeHTML(s.name || "-")}</strong><br><span class="text-xs">${escapeHTML(s.tuid || "-")}</span></td>
-      <td class="p-3"><strong>${escapeHTML(s.trip || "-")}</strong><br><span class="text-xs">Sponsor: ${escapeHTML(s.sponsor || "-")}</span></td>
-      <td class="p-3 font-bold text-amber-600">$${formatCurrency(s.total)}</td>
-      <td class="p-3"><span class="px-2 py-1 rounded-full text-xs ${statusBadge(s.status)}">${escapeHTML(s.status || "Under Review")}</span></td>
-      <td class="p-3 text-right space-x-2">
-        <button onclick="openAdminDetails(${s.id})" class="text-blue-700 font-bold text-xs uppercase">View All</button>
-        <button onclick="updateStatus(${s.id}, 'Approved')" class="text-green-700 font-bold text-xs uppercase">Approve</button>
-        <button onclick="updateStatus(${s.id}, 'Revision Needed')" class="text-red-700 font-bold text-xs uppercase">Revise</button>
-      </td>
-    </tr>
-  `
-    )
-    .join("");
+    .forEach((item) => {
+      const statusClass = `status-${item.status.toLowerCase().replaceAll(" ", "-")}`;
+      const row = document.createElement("tr");
+      row.className = "border-t";
+      row.innerHTML = `
+        <td class="p-3">
+          <div class="font-semibold">${escapeHTML(item.name)}</div>
+          <div class="text-xs text-stone-500">${escapeHTML(item.email)}</div>
+          <div class="text-xs text-stone-500">${escapeHTML(item.tID)}</div>
+        </td>
+        <td class="p-3">
+          <div class="font-semibold">${escapeHTML(item.trip)}</div>
+          <div class="text-xs text-stone-500">${escapeHTML(item.destination)}</div>
+        </td>
+        <td class="p-3 text-sm text-stone-700 max-w-[280px]">
+          <div class="line-clamp-4">${escapeHTML(item.purpose || "No reason provided")}</div>
+        </td>
+        <td class="p-3 text-sm text-stone-600">${escapeHTML(item.startDate)} to ${escapeHTML(item.endDate)}</td>
+        <td class="p-3 font-semibold">$${Number(item.total || 0).toFixed(2)}</td>
+        <td class="p-3 text-sm">
+          <div>${escapeHTML(item.documentName || "No file uploaded")}</div>
+          <button onclick="openFileViewer(${item.id})" class="mt-1 text-xs text-blue-700 hover:underline ${item.documentDataURL ? "" : "opacity-40 cursor-not-allowed"}" ${item.documentDataURL ? "" : "disabled"}>View File</button>
+        </td>
+        <td class="p-3"><span class="status-pill ${statusClass}">${escapeHTML(item.status)}</span></td>
+        <td class="p-3 text-right space-x-2">
+          <button onclick="updateStatus(${item.id}, 'Approved')" class="text-xs font-semibold text-green-700 hover:underline">Approve</button>
+          <button onclick="updateStatus(${item.id}, 'Revision Needed')" class="text-xs font-semibold text-red-700 hover:underline">Request Revision</button>
+        </td>
+      `;
+      tbody.appendChild(row);
+    });
 }
 
-function logout() {
-  location.reload();
+function openFileViewer(id) {
+  const request = submissions.find((item) => item.id === id);
+  if (!request || !request.documentDataURL) {
+    alert("No uploaded file found for this request.");
+    return;
+  }
+
+  const modal = document.getElementById("fileViewerModal");
+  const body = document.getElementById("fileViewerBody");
+  const title = document.getElementById("fileViewerTitle");
+  const mimeType = request.documentType || "";
+
+  title.innerText = `Submitted File: ${request.documentName || "Document"}`;
+
+  if (mimeType.startsWith("image/")) {
+    body.innerHTML = `<img src="${request.documentDataURL}" alt="${escapeHTML(request.documentName || "Submitted file")}" class="max-w-full h-auto rounded border">`;
+  } else if (mimeType === "application/pdf") {
+    body.innerHTML = `<iframe src="${request.documentDataURL}" title="PDF Preview" class="w-full h-[65vh] border rounded"></iframe>`;
+  } else {
+    body.innerHTML = `
+      <p class="text-sm text-stone-700 mb-3">Preview is not available for this file type.</p>
+      <a class="text-blue-700 underline" href="${request.documentDataURL}" download="${escapeHTML(request.documentName || "submitted-file")}">Download file</a>
+    `;
+  }
+
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+}
+
+function closeFileViewer() {
+  const modal = document.getElementById("fileViewerModal");
+  const body = document.getElementById("fileViewerBody");
+  body.innerHTML = "";
+  modal.classList.add("hidden");
+  modal.classList.remove("flex");
+}
+
+function updateStatus(id, nextStatus) {
+  const request = submissions.find((item) => item.id === id);
+  if (!request) {
+    return;
+  }
+
+  if (nextStatus === "Revision Needed") {
+    const feedback = prompt("Enter revision comments for the student:", request.comment || "");
+    if (feedback === null) {
+      return;
+    }
+    request.comment = feedback.trim();
+  } else {
+    request.comment = "";
+  }
+
+  request.status = nextStatus;
+  saveData();
+  addNotification(`Admin updated ${request.trip} to ${nextStatus}.`);
+  renderAdminTable();
+}
+
+function clearAllData() {
+  if (!confirm("This will permanently clear all local portal data on this browser. Continue?")) {
+    return;
+  }
+
+  localStorage.removeItem(DATA_KEY);
+  localStorage.removeItem(LOG_KEY);
+  submissions = [];
+  notificationLog = [];
+
+  if (currentRole === "admin") {
+    renderAdminTable();
+  }
+  if (currentRole === "student") {
+    renderStudentRequests();
+    renderNotifications();
+  }
+
+  alert("All local data has been cleared.");
 }
 
 window.addEventListener("DOMContentLoaded", () => {
+  showView("loginSection");
   updateStepUI();
-  renderStudentRequests();
-  renderAdminTable();
 });
