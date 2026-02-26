@@ -502,12 +502,19 @@ function closeAdminDetails() {
 
 function renderAdminTable() {
   const tbody = byId("adminTableBody");
-  if (!submissions.length) {
-    tbody.innerHTML = '<tr class="border-t"><td class="p-3 text-sm text-stone-500 italic" colspan="5">No submissions yet.</td></tr>';
+  const search = (byId("adminSearch")?.value || "").trim().toLowerCase();
+  const filtered = submissions.filter((s) => {
+    const haystack = `${s.name || ""} ${s.tuid || ""} ${s.email || ""} ${s.trip || ""} ${s.sponsor || ""} ${s.destination || ""}`.toLowerCase();
+    return haystack.includes(search);
+  });
+
+  if (!filtered.length) {
+    const emptyMessage = submissions.length ? "No matching students found." : "No submissions yet.";
+    tbody.innerHTML = `<tr class="border-t"><td class="p-3 text-sm text-stone-500 italic" colspan="5">${emptyMessage}</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = submissions
+  tbody.innerHTML = filtered
     .slice()
     .sort((a, b) => b.id - a.id)
     .map(
