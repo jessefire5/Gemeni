@@ -354,6 +354,23 @@ function editRequest(id) {
   updateStepUI();
 }
 
+function escapeHTML(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function formatCurrency(value) {
+  return Number(value || 0).toFixed(2);
+}
+
+function normalizeDocs(docs) {
+  return Array.isArray(docs) ? docs : [];
+}
+
 function statusBadge(status) {
   const s = status || "Under Review";
   if (s === "Approved") {
@@ -381,14 +398,106 @@ function renderStudentRequests() {
     .map(
       (s) => `
     <tr class="border-t">
-      <td class="p-3 font-bold">${s.trip || "Untitled Trip"}</td>
-      <td class="p-3">${s.destination || "-"}</td>
-      <td class="p-3"><span class="px-2 py-1 rounded-full text-xs ${statusBadge(s.status)}">${s.status || "Under Review"}</span></td>
+      <td class="p-3 font-bold">${escapeHTML(s.trip || "Untitled Trip")}</td>
+      <td class="p-3">${escapeHTML(s.destination || "-")}</td>
+      <td class="p-3"><span class="px-2 py-1 rounded-full text-xs ${statusBadge(s.status)}">${escapeHTML(s.status || "Under Review")}</span></td>
       <td class="p-3 text-right"><button onclick="editRequest(${s.id})" class="text-blue-600 underline">Edit</button></td>
     </tr>
   `
     )
     .join("");
+}
+
+function updateStatus(id, nextStatus) {
+  const row = submissions.find((item) => item.id === id);
+  if (!row) {
+    return;
+  }
+
+  row.status = nextStatus;
+  persistSubmissions();
+  renderAdminTable();
+  renderStudentRequests();
+}
+
+function openAdminDetails(id) {
+  const row = submissions.find((item) => item.id === id);
+  if (!row) {
+    return;
+  }
+
+  const docs = normalizeDocs(row.docs);
+  const expenses = row.expenses || {};
+  const docItems = docs.length
+    ? docs.map((name) => `<li class="text-sm text-stone-700">• ${escapeHTML(name)}</li>`).join("")
+    : '<li class="text-sm text-stone-500 italic">No files uploaded</li>';
+
+  byId("adminDetailTitle").textContent = `${row.trip || "Travel Request"} - Full Submission`;
+  byId("adminDetailContent").innerHTML = `
+    <div class="grid md:grid-cols-2 gap-4">
+      <section class="rounded-xl border border-stone-200 p-4">
+        <h4 class="font-black text-stone-800 mb-2">Student Information</h4>
+        <div class="space-y-1 text-sm">
+          <div><span class="font-semibold text-stone-600">Name:</span> ${escapeHTML(row.name || "-")}</div>
+          <div><span class="font-semibold text-stone-600">TUID:</span> ${escapeHTML(row.tuid || "-")}</div>
+          <div><span class="font-semibold text-stone-600">Email:</span> ${escapeHTML(row.email || "-")}</div>
+          <div><span class="font-semibold text-stone-600">Department:</span> ${escapeHTML(row.department || "-")}</div>
+          <div><span class="font-semibold text-stone-600">Address:</span> ${escapeHTML(row.address || "-")}</div>
+        </div>
+      </section>
+
+      <section class="rounded-xl border border-stone-200 p-4">
+        <h4 class="font-black text-stone-800 mb-2">Trip Information</h4>
+        <div class="space-y-1 text-sm">
+          <div><span class="font-semibold text-stone-600">Trip / Event:</span> ${escapeHTML(row.trip || "-")}</div>
+          <div><span class="font-semibold text-stone-600">Destination:</span> ${escapeHTML(row.destination || "-")}</div>
+          <div><span class="font-semibold text-stone-600">Purpose:</span> ${escapeHTML(row.purpose || "-")}</div>
+          <div><span class="font-semibold text-stone-600">Departure:</span> ${escapeHTML(row.startDate || "-")}</div>
+          <div><span class="font-semibold text-stone-600">Return:</span> ${escapeHTML(row.endDate || "-")}</div>
+          <div><span class="font-semibold text-stone-600">International:</span> ${escapeHTML(row.intl || "No")}</div>
+        </div>
+      </section>
+
+      <section class="rounded-xl border border-stone-200 p-4 md:col-span-2">
+        <h4 class="font-black text-stone-800 mb-3">Expense Breakdown</h4>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+          <div class="rounded-lg bg-stone-50 p-2"><span class="text-stone-500">Registration</span><div class="font-semibold">$${formatCurrency(expenses.reg)}</div></div>
+          <div class="rounded-lg bg-stone-50 p-2"><span class="text-stone-500">Lodging</span><div class="font-semibold">$${formatCurrency(expenses.lodging)}</div></div>
+          <div class="rounded-lg bg-stone-50 p-2"><span class="text-stone-500">Airfare</span><div class="font-semibold">$${formatCurrency(expenses.air)}</div></div>
+          <div class="rounded-lg bg-stone-50 p-2"><span class="text-stone-500">Transit</span><div class="font-semibold">$${formatCurrency(expenses.transit)}</div></div>
+          <div class="rounded-lg bg-stone-50 p-2"><span class="text-stone-500">Meals</span><div class="font-semibold">$${formatCurrency(expenses.meals)}</div></div>
+          <div class="rounded-lg bg-stone-50 p-2"><span class="text-stone-500">Parking/Tolls</span><div class="font-semibold">$${formatCurrency(expenses.parking)}</div></div>
+          <div class="rounded-lg bg-stone-50 p-2"><span class="text-stone-500">Mileage (miles)</span><div class="font-semibold">${escapeHTML(expenses.mileage ?? 0)}</div></div>
+          <div class="rounded-lg bg-stone-100 p-2 border border-stone-300"><span class="text-stone-700 font-semibold">Estimated Total</span><div class="font-black text-stone-900">$${formatCurrency(row.total)}</div></div>
+        </div>
+      </section>
+
+      <section class="rounded-xl border border-stone-200 p-4">
+        <h4 class="font-black text-stone-800 mb-2">Funding & Sponsorship</h4>
+        <div class="space-y-1 text-sm">
+          <div><span class="font-semibold text-stone-600">Faculty Sponsor:</span> ${escapeHTML(row.sponsor || "-")}</div>
+          <div><span class="font-semibold text-stone-600">GSA / OURCI Funding:</span> ${escapeHTML(row.funding || "No")}</div>
+          <div><span class="font-semibold text-stone-600">Funding Amount:</span> $${formatCurrency(row.fundingAmount)}</div>
+          <div><span class="font-semibold text-stone-600">Status:</span> ${escapeHTML(row.status || "Under Review")}</div>
+        </div>
+      </section>
+
+      <section class="rounded-xl border border-stone-200 p-4">
+        <h4 class="font-black text-stone-800 mb-2">Supporting Documents</h4>
+        <ul class="space-y-1">
+          ${docItems}
+        </ul>
+      </section>
+    </div>
+  `;
+
+  byId("adminDetailModal").classList.remove("hidden");
+  byId("adminDetailModal").classList.add("flex");
+}
+
+function closeAdminDetails() {
+  byId("adminDetailModal").classList.add("hidden");
+  byId("adminDetailModal").classList.remove("flex");
 }
 
 function renderAdminTable() {
@@ -404,13 +513,14 @@ function renderAdminTable() {
     .map(
       (s) => `
     <tr class="border-t">
-      <td class="p-3"><strong>${s.name || "-"}</strong><br><span class="text-xs">${s.tuid || "-"}</span></td>
-      <td class="p-3"><strong>${s.trip || "-"}</strong><br><span class="text-xs">Sponsor: ${s.sponsor || "-"}</span></td>
-      <td class="p-3 font-bold text-amber-600">$${Number(s.total || 0).toFixed(2)}</td>
-      <td class="p-3"><span class="px-2 py-1 rounded-full text-xs bg-amber-100">${s.status || "Under Review"}</span></td>
+      <td class="p-3"><strong>${escapeHTML(s.name || "-")}</strong><br><span class="text-xs">${escapeHTML(s.tuid || "-")}</span></td>
+      <td class="p-3"><strong>${escapeHTML(s.trip || "-")}</strong><br><span class="text-xs">Sponsor: ${escapeHTML(s.sponsor || "-")}</span></td>
+      <td class="p-3 font-bold text-amber-600">$${formatCurrency(s.total)}</td>
+      <td class="p-3"><span class="px-2 py-1 rounded-full text-xs ${statusBadge(s.status)}">${escapeHTML(s.status || "Under Review")}</span></td>
       <td class="p-3 text-right space-x-2">
-        <button class="text-green-700 font-bold text-xs uppercase">Approve</button>
-        <button class="text-red-700 font-bold text-xs uppercase">Deny</button>
+        <button onclick="openAdminDetails(${s.id})" class="text-blue-700 font-bold text-xs uppercase">View All</button>
+        <button onclick="updateStatus(${s.id}, 'Approved')" class="text-green-700 font-bold text-xs uppercase">Approve</button>
+        <button onclick="updateStatus(${s.id}, 'Revision Needed')" class="text-red-700 font-bold text-xs uppercase">Revise</button>
       </td>
     </tr>
   `
